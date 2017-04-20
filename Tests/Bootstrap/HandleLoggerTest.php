@@ -5,33 +5,28 @@ namespace Viserio\Component\Foundation\Tests\Bootstrap;
 use Narrowspark\TestingHelper\Phpunit\MockeryTestCase;
 use Viserio\Component\Contracts\Container\Container as ContainerContract;
 use Viserio\Component\Contracts\Foundation\Kernel as KernelContract;
-use Viserio\Component\Foundation\Bootstrap\LoadServiceProvider;
+use Viserio\Component\Foundation\Bootstrap\HandleLogger;
 use Viserio\Component\Foundation\Providers\ConfigureLoggingServiceProvider;
+use Viserio\Component\Log\Providers\LoggerServiceProvider;
 
-class LoadServiceProviderTest extends MockeryTestCase
+class HandleLoggerTest extends MockeryTestCase
 {
     public function testBootstrap()
     {
-        $provider = new ConfigureLoggingServiceProvider();
-
-        $bootstraper = new LoadServiceProvider();
+        $bootstraper = new HandleLogger();
 
         $container = $this->mock(ContainerContract::class);
-        $container->shouldReceive('resolve')
-            ->once()
-            ->with(ConfigureLoggingServiceProvider::class)
-            ->andReturn($provider);
         $container->shouldReceive('register')
             ->once()
-            ->with($provider);
+            ->with(ConfigureLoggingServiceProvider::class);
+        $container->shouldReceive('register')
+            ->once()
+            ->with(LoggerServiceProvider::class);
 
         $kernel = $this->mock(KernelContract::class);
         $kernel->shouldReceive('getContainer')
             ->once()
             ->andReturn($container);
-        $kernel->shouldReceive('getKernelConfigurations')
-            ->once()
-            ->andReturn(['app' => ['serviceproviders' => [ConfigureLoggingServiceProvider::class]]]);
 
         $bootstraper->bootstrap($kernel);
     }
