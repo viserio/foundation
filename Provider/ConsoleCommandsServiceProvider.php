@@ -7,12 +7,17 @@ use Psr\Container\ContainerInterface;
 use Symfony\Component\Process\Process;
 use Viserio\Component\Console\Application;
 use Viserio\Component\Contract\Foundation\Kernel as KernelContract;
+use Viserio\Component\Contract\OptionsResolver\ProvidesDefaultOptions as ProvidesDefaultOptionsContract;
+use Viserio\Component\Contract\OptionsResolver\RequiresComponentConfig as RequiresComponentConfigContract;
 use Viserio\Component\Foundation\Console\Command\DownCommand;
 use Viserio\Component\Foundation\Console\Command\KeyGenerateCommand;
 use Viserio\Component\Foundation\Console\Command\ServeCommand;
 use Viserio\Component\Foundation\Console\Command\UpCommand;
 
-class ConsoleCommandsServiceProvider implements ServiceProviderInterface
+class ConsoleCommandsServiceProvider implements
+    ServiceProviderInterface,
+    RequiresComponentConfigContract,
+    ProvidesDefaultOptionsContract
 {
     /**
      * {@inheritdoc}
@@ -29,6 +34,27 @@ class ConsoleCommandsServiceProvider implements ServiceProviderInterface
     {
         return [
             Application::class => [self::class, 'extendConsole'],
+        ];
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public static function getDimensions(): iterable
+    {
+        return ['viserio', 'console'];
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public static function getDefaultOptions(): iterable
+    {
+        return [
+            'lazily_commands' => [
+                'app:down' => DownCommand::class,
+                'app:up'   => UpCommand::class,
+            ],
         ];
     }
 
