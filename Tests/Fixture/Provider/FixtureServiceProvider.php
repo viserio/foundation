@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-namespace Viserio\Component\Foundation\Tests\Fixtures\Provider;
+namespace Viserio\Component\Foundation\Tests\Fixture\Provider;
 
 use Interop\Container\ServiceProviderInterface;
 
