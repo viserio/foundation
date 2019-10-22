@@ -1,18 +1,29 @@
 <?php
+
 declare(strict_types=1);
+
+/**
+ * This file is part of Narrowspark Framework.
+ *
+ * (c) Daniel Bannert <d.bannert@anolilab.de>
+ *
+ * This source file is subject to the MIT license that is bundled
+ * with this source code in the file LICENSE.
+ */
+
 namespace Viserio\Component\Foundation\Tests\Bootstrap;
 
-use Dotenv\Dotenv;
-use Mockery\MockInterface;
+use Closure;
 use Narrowspark\TestingHelper\Phpunit\MockeryTestCase;
-use Viserio\Component\Contract\Foundation\Kernel as KernelContract;
-use Viserio\Component\Foundation\Bootstrap\LoadEnvironmentVariables;
-use Viserio\Component\Foundation\Tests\Helper\ClassStack;
+use Viserio\Component\Foundation\Bootstrap\LoadEnvironmentVariablesBootstrap;
+use Viserio\Contract\Foundation\Kernel as KernelContract;
 
 /**
  * @internal
+ *
+ * @small
  */
-final class LoadEnvironmentVariablesTest extends MockeryTestCase
+final class LoadEnvironmentVariablesBootstrapTest extends MockeryTestCase
 {
     /**
      * {@inheritdoc}
@@ -21,17 +32,17 @@ final class LoadEnvironmentVariablesTest extends MockeryTestCase
     {
         parent::tearDown();
 
-        ClassStack::reset();
+        unset($_ENV['SHELL_VERBOSITY'], $_GET['SHELL_VERBOSITY'], $_SERVER['SHELL_VERBOSITY']);
     }
 
     public function testGetPriority(): void
     {
-        $this->assertSame(32, LoadEnvironmentVariables::getPriority());
+        self::assertSame(32, LoadEnvironmentVariablesBootstrap::getPriority());
     }
 
     public function testDontLoadIfCached(): void
     {
-        $kernel = $this->mock(KernelContract::class);
+        $kernel = \Mockery::mock(KernelContract::class);
 
         $this->arrangeStoragePath($kernel, \dirname(__DIR__) . \DIRECTORY_SEPARATOR . 'Fixture' . \DIRECTORY_SEPARATOR . 'config.cache.php');
 
@@ -40,12 +51,12 @@ final class LoadEnvironmentVariablesTest extends MockeryTestCase
         $kernel->shouldReceive('getEnvironmentPath')
             ->never();
 
-        LoadEnvironmentVariables::bootstrap($kernel);
+        LoadEnvironmentVariablesBootstrap::bootstrap($kernel);
     }
 
     public function testBootstrap(): void
     {
-        $kernel = $this->mock(KernelContract::class);
+        $kernel = \Mockery::mock(KernelContract::class);
 
         $this->arrangeStoragePath($kernel, '');
 
@@ -58,18 +69,16 @@ final class LoadEnvironmentVariablesTest extends MockeryTestCase
 
         $this->arrangeIsRunningInConsole($kernel);
 
-        $kernel->shouldReceive('detectEnvironment')
-            ->once()
-            ->with(\Mockery::type(\Closure::class));
+        $this->arrangeKernelDetect($kernel);
 
-        LoadEnvironmentVariables::bootstrap($kernel);
+        LoadEnvironmentVariablesBootstrap::bootstrap($kernel);
     }
 
     public function testBootstrapWithAppEnv(): void
     {
         \putenv('APP_ENV=prod');
 
-        $kernel = $this->mock(KernelContract::class);
+        $kernel = \Mockery::mock(KernelContract::class);
 
         $this->arrangeEnvPathToFixtures($kernel);
 
@@ -80,10 +89,12 @@ final class LoadEnvironmentVariablesTest extends MockeryTestCase
             ->once()
             ->with('.env.prod');
 
+        $this->arrangeKernelDetect($kernel);
+
         $this->arrangeStoragePath($kernel, '');
         $this->arrangeIsRunningInConsole($kernel);
 
-        LoadEnvironmentVariables::bootstrap($kernel);
+        LoadEnvironmentVariablesBootstrap::bootstrap($kernel);
 
         // remove APP_ENV
         \putenv('APP_ENV=');
@@ -92,12 +103,14 @@ final class LoadEnvironmentVariablesTest extends MockeryTestCase
 
     public function testBootstrapWithArgv(): void
     {
+        $argv = $_SERVER['argv'];
+
         $_SERVER['argv'] = [
             'load',
             '--env=local',
         ];
 
-        $kernel = $this->mock(KernelContract::class);
+        $kernel = \Mockery::mock(KernelContract::class);
 
         $this->arrangeEnvPathToFixtures($kernel);
 
@@ -114,54 +127,15 @@ final class LoadEnvironmentVariablesTest extends MockeryTestCase
             ->once()
             ->andReturn(true);
 
-        LoadEnvironmentVariables::bootstrap($kernel);
+        $this->arrangeKernelDetect($kernel);
 
-        foreach (['load', '--env=local'] as $i => $value) {
-            if (($key = \array_search($value, $_SERVER['argv'], true)) !== false) {
-                unset($_SERVER['argv'][$key]);
-            }
-        }
-    }
+        LoadEnvironmentVariablesBootstrap::bootstrap($kernel);
 
-    public function testBootstrapWithOutDotenvAndEnv(): void
-    {
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('[APP_ENV] environment variable is not defined. You need to define environment variables for configuration or run [composer require vlucas/phpdotenv] as a Composer dependency to load variables from a .env file.');
-
-        ClassStack::add(Dotenv::class, false);
-
-        \putenv('APP_ENV=');
-        \putenv('APP_ENV');
-
-        $kernel = $this->mock(KernelContract::class);
-
-        $this->arrangeStoragePath($kernel, '');
-
-        LoadEnvironmentVariables::bootstrap($kernel);
-    }
-
-    public function testBootstrapWithOutDotenv(): void
-    {
-        ClassStack::add(Dotenv::class, false);
-
-        \putenv('APP_ENV=prod');
-
-        $kernel = $this->mock(KernelContract::class);
-
-        $this->arrangeStoragePath($kernel, '');
-
-        $kernel->shouldReceive('detectEnvironment')
-            ->once()
-            ->with(\Mockery::type(\Closure::class));
-
-        LoadEnvironmentVariables::bootstrap($kernel);
-
-        \putenv('APP_ENV=');
-        \putenv('APP_ENV');
+        $_SERVER['argv'] = $argv;
     }
 
     /**
-     * @param \Mockery\MockInterface|\Viserio\Component\Contract\Foundation\Kernel $kernel
+     * @param \Mockery\MockInterface|\Viserio\Contract\Foundation\Kernel $kernel
      *
      * @return void
      */
@@ -173,7 +147,7 @@ final class LoadEnvironmentVariablesTest extends MockeryTestCase
     }
 
     /**
-     * @param \Mockery\MockInterface|\Viserio\Component\Contract\Foundation\Kernel $kernel
+     * @param \Mockery\MockInterface|\Viserio\Contract\Foundation\Kernel $kernel
      *
      * @return void
      */
@@ -185,14 +159,28 @@ final class LoadEnvironmentVariablesTest extends MockeryTestCase
     }
 
     /**
-     * @param MockInterface $kernel
-     * @param string        $path
+     * @param \Mockery\MockInterface|\Viserio\Contract\Foundation\Kernel $kernel
+     * @param string                                                     $path
      */
-    private function arrangeStoragePath(MockInterface $kernel, string $path): void
+    private function arrangeStoragePath($kernel, string $path): void
     {
         $kernel->shouldReceive('getStoragePath')
             ->once()
             ->with('config.cache.php')
             ->andReturn($path);
+    }
+
+    /**
+     * @param \Mockery\MockInterface|\Viserio\Contract\Foundation\Kernel $kernel
+     */
+    private function arrangeKernelDetect($kernel): void
+    {
+        $kernel->shouldReceive('detectEnvironment')
+            ->once()
+            ->with(\Mockery::type(Closure::class));
+
+        $kernel->shouldReceive('detectDebugMode')
+            ->once()
+            ->with(\Mockery::type(Closure::class));
     }
 }
